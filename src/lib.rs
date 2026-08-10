@@ -2,6 +2,7 @@ use std::{fs, path::Path};
 
 use goblin::elf::Elf;
 
+pub mod safepoint_gen;
 pub mod stackmap;
 
 pub fn read_reloc_names(path: &Path, section_name: &str) -> Vec<String> {
