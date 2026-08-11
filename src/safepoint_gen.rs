@@ -78,19 +78,31 @@ impl<'a> SafepointSourceGenerator<'a> {
         for (i, record) in self.stack_map.stack_map_records.iter().enumerate() {
             for location in record.locations.iter().take(3) {
                 if !matches!(location.typ, LocationType::Constant(0)) {
-                    panic!("Whops!")
+                    panic!(
+                        "Expected 3 constants at the start of record locations. Found: {:?}",
+                        location
+                    )
                 }
             }
-            write!(self.wr, "static uint64_t offsets_{i}[] = {{")?;
+            if record.locations.iter().skip(3).len() == 0 {
+                continue;
+            }
+            writeln!(self.wr, "static struct Location obj_locations_{i}[] = {{")?;
             for location in record.locations.iter().skip(3) {
                 match location.typ {
-                    LocationType::Indirect(7, offset) => write!(self.wr, "{offset}, ")?,
-                    _ => panic!("Whoops!"),
+                    LocationType::Direct(reg, offset) => {
+                        writeln!(self.wr, "    {{DIRECT, {reg}, {offset}}}, ")?
+                    }
+                    LocationType::Indirect(reg, offset) => {
+                        writeln!(self.wr, "    {{INDIRECT, {reg}, {offset}}},")?
+                    }
+                    _ => panic!("Location type unsupported: {:?}", location),
                 }
             }
             writeln!(self.wr, "}};")?;
+            writeln!(self.wr)?;
         }
-        writeln!(self.wr)
+        Ok(())
     }
 
     fn gen_safepoints(&mut self) -> Result<(), std::io::Error> {
@@ -114,7 +126,12 @@ impl<'a> SafepointSourceGenerator<'a> {
                 "{}, ",
                 self.stack_map.stack_size_records[curr_fun_idx].stack_size
             )?;
-            write!(self.wr, "offsets_{}", i)?;
+            write!(self.wr, "{}, ", record.locations.len())?;
+            if record.locations.len() > 3 {
+                write!(self.wr, "obj_locations_{}", i)?;
+            } else {
+                write!(self.wr, "0")?;
+            }
             writeln!(self.wr, "}},")?;
         }
         writeln!(self.wr, "}};")
