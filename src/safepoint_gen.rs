@@ -126,7 +126,7 @@ impl<'a> SafepointSourceGenerator<'a> {
                 "{}, ",
                 self.stack_map.stack_size_records[curr_fun_idx].stack_size
             )?;
-            write!(self.wr, "{}, ", record.locations.len())?;
+            write!(self.wr, "{}, ", record.locations.len() - 3)?;
             if record.locations.len() > 3 {
                 write!(self.wr, "obj_locations_{}", i)?;
             } else {
