@@ -34,6 +34,7 @@ pub fn gen_safepoints_source(
     };
 
     generator.gen_header().map_err(|e| e.to_string())?;
+    generator.gen_safepoints_len().map_err(|e| e.to_string())?;
     generator.gen_externs().map_err(|e| e.to_string())?;
     generator.gen_offsets().map_err(|e| e.to_string())?;
     generator.gen_safepoints().map_err(|e| e.to_string())?;
@@ -56,6 +57,15 @@ pub fn gen_safepoints_source(
 }
 
 impl<'a> SafepointSourceGenerator<'a> {
+    fn gen_safepoints_len(&mut self) -> Result<(), std::io::Error> {
+        writeln!(
+            self.wr,
+            "int safepoints_len = {};",
+            self.stack_map.num_records
+        )?;
+        writeln!(self.wr)
+    }
+
     fn gen_header(&mut self) -> Result<(), std::io::Error> {
         writeln!(self.wr, "#include \"safepoints.h\"")?;
         writeln!(self.wr)
@@ -159,8 +169,8 @@ fn gen_header_file(path: &Path) -> Result<(), String> {
     let mut wr = BufWriter::new(file);
     write!(
         &mut wr,
-        r#"#ifndef __LLVM_STACK_MAP_H
-#define __LLVM_STACK_MAP_H
+        r#"#ifndef __SAFEPOINTS_H
+#define __SAFEPOINTS_H
 
 #include <stdint.h>
 
@@ -172,7 +182,9 @@ struct Safepoint {{
 
 extern struct Safepoint safepoints[];
 
-#endif // __LLVM_STACK_MAP_H
+extern int safepoints_len;
+
+#endif // __SAFEPOINTS_H
 "#
     )
     .map_err(|e| e.to_string())
