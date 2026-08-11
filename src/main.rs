@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use llvm_stackmap_parser::{
     read_reloc_names, read_section_bytes, safepoint_gen::gen_safepoints_source, stackmap::StackMap,
@@ -10,5 +10,5 @@ fn main() {
     let stack_map = StackMap::from(&bytes[..]);
     let reloc_names = read_reloc_names(&path, ".rela.llvm_stackmaps");
 
-    gen_safepoints_source(&stack_map, &reloc_names).unwrap();
+    gen_safepoints_source(&stack_map, &reloc_names, &env::current_dir().unwrap()).unwrap();
 }

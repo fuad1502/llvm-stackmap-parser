@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs::File, io::BufWriter};
 
@@ -10,8 +11,20 @@ struct SafepointSourceGenerator<'a> {
     reloc_names: &'a [String],
 }
 
-pub fn gen_safepoints_source(stack_map: &StackMap, reloc_names: &[String]) -> Result<(), String> {
-    let file = File::create("safepoints.c").map_err(|e| e.to_string())?;
+pub struct SafePointsLib {
+    pub ar_path: PathBuf,
+    pub header_path: PathBuf,
+}
+
+pub fn gen_safepoints_source(
+    stack_map: &StackMap,
+    reloc_names: &[String],
+    output_dir: &Path,
+) -> Result<SafePointsLib, String> {
+    let mut safepoints_source = PathBuf::from(output_dir);
+    safepoints_source.push("safepoints.c");
+
+    let file = File::create(&safepoints_source).map_err(|e| e.to_string())?;
     let wr = BufWriter::new(file);
 
     let mut generator = SafepointSourceGenerator {
@@ -24,16 +37,22 @@ pub fn gen_safepoints_source(stack_map: &StackMap, reloc_names: &[String]) -> Re
     generator.gen_externs().map_err(|e| e.to_string())?;
     generator.gen_offsets().map_err(|e| e.to_string())?;
     generator.gen_safepoints().map_err(|e| e.to_string())?;
-
     generator.wr.flush().map_err(|e| e.to_string())?;
-    gen_header_file()?;
-    generator.compile_safepoints()?;
-    generator.archive_safepoints()?;
 
-    std::fs::remove_file("safepoints.o").map_err(|e| e.to_string())?;
-    std::fs::remove_file("safepoints.c").map_err(|e| e.to_string())?;
+    let mut safepoints_header = PathBuf::from(output_dir);
+    safepoints_header.push("safepoints.h");
+    gen_header_file(&safepoints_header)?;
 
-    Ok(())
+    let safepoints_obj = generator.compile_safepoints(&safepoints_source)?;
+    let safepoints_ar = generator.archive_safepoints(&safepoints_obj)?;
+
+    std::fs::remove_file(safepoints_obj).map_err(|e| e.to_string())?;
+    std::fs::remove_file(safepoints_source).map_err(|e| e.to_string())?;
+
+    Ok(SafePointsLib {
+        ar_path: safepoints_ar,
+        header_path: safepoints_header,
+    })
 }
 
 impl<'a> SafepointSourceGenerator<'a> {
@@ -103,23 +122,40 @@ impl<'a> SafepointSourceGenerator<'a> {
         writeln!(self.wr, "}};")
     }
 
-    fn compile_safepoints(&mut self) -> Result<(), String> {
+    fn compile_safepoints(&mut self, safepoints_source: &Path) -> Result<PathBuf, String> {
+        let safepoints_obj = safepoints_source.with_extension("o");
         let mut cmd = Command::new("gcc");
-        cmd.args(["-c", "safepoints.c", "-I", ".", "-o", "safepoints.o"]);
+        cmd.args([
+            "-c",
+            safepoints_source.to_str().unwrap(),
+            "-I",
+            ".",
+            "-o",
+            safepoints_obj.to_str().unwrap(),
+        ]);
         execute_command(cmd)?;
-        Ok(())
+        Ok(safepoints_obj)
     }
 
-    fn archive_safepoints(&mut self) -> Result<(), String> {
+    fn archive_safepoints(&mut self, safepoints_obj: &Path) -> Result<PathBuf, String> {
+        let safepoints_ar = safepoints_obj
+            .with_file_name(
+                String::from("lib") + safepoints_obj.file_name().unwrap().to_str().unwrap(),
+            )
+            .with_extension("a");
         let mut cmd = Command::new("ar");
-        cmd.args(["rcs", "safepoints.a", "safepoints.o"]);
+        cmd.args([
+            "rcs",
+            safepoints_ar.to_str().unwrap(),
+            safepoints_obj.to_str().unwrap(),
+        ]);
         execute_command(cmd)?;
-        Ok(())
+        Ok(safepoints_ar)
     }
 }
 
-fn gen_header_file() -> Result<(), String> {
-    let file = File::create("safepoints.h").map_err(|e| e.to_string())?;
+fn gen_header_file(path: &Path) -> Result<(), String> {
+    let file = File::create(path).map_err(|e| e.to_string())?;
     let mut wr = BufWriter::new(file);
     write!(
         &mut wr,
