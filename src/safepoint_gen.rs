@@ -11,16 +11,11 @@ struct SafepointSourceGenerator<'a> {
     reloc_names: &'a [String],
 }
 
-pub struct SafePointsLib {
-    pub ar_path: PathBuf,
-    pub header_path: PathBuf,
-}
-
 pub fn gen_safepoints_source(
     stack_map: &StackMap,
     reloc_names: &[String],
     output_dir: &Path,
-) -> Result<SafePointsLib, String> {
+) -> Result<PathBuf, String> {
     let mut safepoints_source = PathBuf::from(output_dir);
     safepoints_source.push("safepoints.c");
 
@@ -40,20 +35,13 @@ pub fn gen_safepoints_source(
     generator.gen_safepoints().map_err(|e| e.to_string())?;
     generator.wr.flush().map_err(|e| e.to_string())?;
 
-    let mut safepoints_header = PathBuf::from(output_dir);
-    safepoints_header.push("safepoints.h");
-    gen_header_file(&safepoints_header)?;
-
     let safepoints_obj = generator.compile_safepoints(&safepoints_source)?;
     let safepoints_ar = generator.archive_safepoints(&safepoints_obj)?;
 
     std::fs::remove_file(safepoints_obj).map_err(|e| e.to_string())?;
     std::fs::remove_file(safepoints_source).map_err(|e| e.to_string())?;
 
-    Ok(SafePointsLib {
-        ar_path: safepoints_ar,
-        header_path: safepoints_header,
-    })
+    Ok(safepoints_ar)
 }
 
 impl<'a> SafepointSourceGenerator<'a> {
@@ -134,12 +122,14 @@ impl<'a> SafepointSourceGenerator<'a> {
 
     fn compile_safepoints(&mut self, safepoints_source: &Path) -> Result<PathBuf, String> {
         let safepoints_obj = safepoints_source.with_extension("o");
+        let mut include_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        include_dir.push("src");
         let mut cmd = Command::new("gcc");
         cmd.args([
             "-c",
             safepoints_source.to_str().unwrap(),
             "-I",
-            ".",
+            include_dir.to_str().unwrap(),
             "-o",
             safepoints_obj.to_str().unwrap(),
         ]);
@@ -162,32 +152,6 @@ impl<'a> SafepointSourceGenerator<'a> {
         execute_command(cmd)?;
         Ok(safepoints_ar)
     }
-}
-
-fn gen_header_file(path: &Path) -> Result<(), String> {
-    let file = File::create(path).map_err(|e| e.to_string())?;
-    let mut wr = BufWriter::new(file);
-    write!(
-        &mut wr,
-        r#"#ifndef __SAFEPOINTS_H
-#define __SAFEPOINTS_H
-
-#include <stdint.h>
-
-struct Safepoint {{
-  void *location;
-  uint64_t stack_size;
-  uint64_t *obj_stack_offsets;
-}};
-
-extern struct Safepoint safepoints[];
-
-extern int safepoints_len;
-
-#endif // __SAFEPOINTS_H
-"#
-    )
-    .map_err(|e| e.to_string())
 }
 
 fn transform_name(name: &str) -> String {
