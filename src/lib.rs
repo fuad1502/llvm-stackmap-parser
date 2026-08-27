@@ -43,3 +43,25 @@ pub fn read_section_bytes(path: &Path, section_name: &str) -> Vec<u8> {
 
     Vec::from(&data[section.sh_offset as usize..(section.sh_offset + section.sh_size) as usize])
 }
+
+pub fn read_section_syms(path: &Path, section_name: &str) -> Vec<String> {
+    let data = fs::read(path).unwrap();
+    let elf = Elf::parse(&data).expect("Failed to parse ELF");
+
+    let section_idx = elf
+        .section_headers
+        .iter()
+        .position(|section| elf.shdr_strtab.get_at(section.sh_name).unwrap_or("") == section_name)
+        .unwrap();
+
+    elf.syms
+        .iter()
+        .filter_map(|sym| {
+            if sym.st_shndx == section_idx {
+                Some(String::from(elf.strtab.get_at(sym.st_name).unwrap()))
+            } else {
+                None
+            }
+        })
+        .collect()
+}

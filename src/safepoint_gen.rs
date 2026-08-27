@@ -9,11 +9,13 @@ struct SafepointSourceGenerator<'a> {
     wr: BufWriter<File>,
     stack_map: &'a StackMap,
     reloc_names: &'a [String],
+    global_gcroot_names: &'a [String],
 }
 
 pub fn gen_safepoints_source(
     stack_map: &StackMap,
     reloc_names: &[String],
+    global_gcroot_names: &[String],
     output_dir: &Path,
 ) -> Result<PathBuf, String> {
     let mut safepoints_source = PathBuf::from(output_dir);
@@ -26,14 +28,10 @@ pub fn gen_safepoints_source(
         wr,
         stack_map,
         reloc_names,
+        global_gcroot_names,
     };
 
-    generator.gen_header().map_err(|e| e.to_string())?;
-    generator.gen_safepoints_len().map_err(|e| e.to_string())?;
-    generator.gen_externs().map_err(|e| e.to_string())?;
-    generator.gen_offsets().map_err(|e| e.to_string())?;
-    generator.gen_safepoints().map_err(|e| e.to_string())?;
-    generator.wr.flush().map_err(|e| e.to_string())?;
+    generator.gen_source().map_err(|e| e.to_string())?;
 
     let safepoints_obj = generator.compile_safepoints(&safepoints_source)?;
     let safepoints_ar = generator.archive_safepoints(&safepoints_obj)?;
@@ -45,6 +43,18 @@ pub fn gen_safepoints_source(
 }
 
 impl<'a> SafepointSourceGenerator<'a> {
+    fn gen_source(&mut self) -> Result<(), std::io::Error> {
+        self.gen_header()?;
+        self.gen_safepoints_len()?;
+        self.gen_externs(self.reloc_names)?;
+        self.gen_offsets()?;
+        self.gen_safepoints()?;
+        self.gen_global_gcroots_len()?;
+        self.gen_externs(self.global_gcroot_names)?;
+        self.gen_global_gcroots()?;
+        self.wr.flush()
+    }
+
     fn gen_safepoints_len(&mut self) -> Result<(), std::io::Error> {
         writeln!(
             self.wr,
@@ -59,8 +69,8 @@ impl<'a> SafepointSourceGenerator<'a> {
         writeln!(self.wr)
     }
 
-    fn gen_externs(&mut self) -> Result<(), std::io::Error> {
-        for name in self.reloc_names {
+    fn gen_externs(&mut self, sym_names: &[String]) -> Result<(), std::io::Error> {
+        for name in sym_names {
             if name == "main" {
                 writeln!(self.wr, "extern int main();")?
             } else {
@@ -133,6 +143,24 @@ impl<'a> SafepointSourceGenerator<'a> {
                 write!(self.wr, "0")?;
             }
             writeln!(self.wr, "}},")?;
+        }
+        writeln!(self.wr, "}};")?;
+        writeln!(self.wr)
+    }
+
+    fn gen_global_gcroots_len(&mut self) -> Result<(), std::io::Error> {
+        writeln!(
+            self.wr,
+            "int global_gcroots_len = {};",
+            self.global_gcroot_names.len()
+        )?;
+        writeln!(self.wr)
+    }
+
+    fn gen_global_gcroots(&mut self) -> Result<(), std::io::Error> {
+        writeln!(self.wr, "void *global_gcroots[] = {{")?;
+        for name in self.global_gcroot_names {
+            writeln!(self.wr, "    {},", transform_name(name))?;
         }
         writeln!(self.wr, "}};")
     }
