@@ -101,10 +101,10 @@ impl<'a> SafepointSourceGenerator<'a> {
             for location in record.locations.iter().skip(3) {
                 match location.typ {
                     LocationType::Direct(reg, offset) => {
-                        writeln!(self.wr, "    {{DIRECT, {reg}, {offset}}}, ")?
+                        writeln!(self.wr, "    {{DIRECT, {reg}, {offset}, NULL}}, ")?
                     }
                     LocationType::Indirect(reg, offset) => {
-                        writeln!(self.wr, "    {{INDIRECT, {reg}, {offset}}},")?
+                        writeln!(self.wr, "    {{INDIRECT, {reg}, {offset}, NULL}},")?
                     }
                     _ => panic!("Location type unsupported: {:?}", location),
                 }
