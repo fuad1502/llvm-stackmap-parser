@@ -9,17 +9,17 @@ pub fn read_reloc_names(path: &Path, section_name: &str) -> Vec<String> {
     let data = fs::read(path).unwrap();
     let elf = Elf::parse(&data).expect("Failed to parse ELF");
 
-    let reloc_section = &elf
-        .shdr_relocs
-        .iter()
-        .find(|(idx, _)| {
-            elf.shdr_strtab
-                .get_at(elf.section_headers[*idx].sh_name)
-                .unwrap_or("")
-                == section_name
-        })
-        .unwrap()
-        .1;
+    let reloc_section = elf.shdr_relocs.iter().find(|(idx, _)| {
+        elf.shdr_strtab
+            .get_at(elf.section_headers[*idx].sh_name)
+            .unwrap_or("")
+            == section_name
+    });
+
+    let reloc_section = match reloc_section {
+        Some(reloc_section) => &reloc_section.1,
+        None => return vec![],
+    };
 
     let mut reloc_names = vec![];
     for reloc in reloc_section {
@@ -31,17 +31,21 @@ pub fn read_reloc_names(path: &Path, section_name: &str) -> Vec<String> {
     reloc_names
 }
 
-pub fn read_section_bytes(path: &Path, section_name: &str) -> Vec<u8> {
+pub fn read_section_bytes(path: &Path, section_name: &str) -> Result<Vec<u8>, String> {
     let data = fs::read(path).unwrap();
-    let elf = Elf::parse(&data).expect("Failed to parse ELF");
+    let elf = Elf::parse(&data).map_err(|e| format!("Failed to parse ELF file: {e}"))?;
 
     let section = elf
         .section_headers
         .iter()
-        .find(|section| elf.shdr_strtab.get_at(section.sh_name).unwrap_or("") == section_name)
-        .unwrap();
+        .find(|section| elf.shdr_strtab.get_at(section.sh_name).unwrap_or("") == section_name);
 
-    Vec::from(&data[section.sh_offset as usize..(section.sh_offset + section.sh_size) as usize])
+    match section {
+        Some(section) => Ok(Vec::from(
+            &data[section.sh_offset as usize..(section.sh_offset + section.sh_size) as usize],
+        )),
+        None => Err(format!("Section {section_name} not found in ELF file")),
+    }
 }
 
 pub fn read_section_syms(path: &Path, section_name: &str) -> Vec<String> {
@@ -51,8 +55,12 @@ pub fn read_section_syms(path: &Path, section_name: &str) -> Vec<String> {
     let section_idx = elf
         .section_headers
         .iter()
-        .position(|section| elf.shdr_strtab.get_at(section.sh_name).unwrap_or("") == section_name)
-        .unwrap();
+        .position(|section| elf.shdr_strtab.get_at(section.sh_name).unwrap_or("") == section_name);
+
+    let section_idx = match section_idx {
+        Some(section_idx) => section_idx,
+        None => return vec![],
+    };
 
     elf.syms
         .iter()

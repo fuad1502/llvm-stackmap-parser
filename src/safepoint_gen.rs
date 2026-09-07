@@ -12,7 +12,7 @@ struct SafepointSourceGenerator<'a> {
     global_gcroot_names: &'a [String],
 }
 
-pub fn gen_safepoints_source(
+pub fn gen_safepoints_lib(
     stack_map: &StackMap,
     reloc_names: &[String],
     global_gcroot_names: &[String],
