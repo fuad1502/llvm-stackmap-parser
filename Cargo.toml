@@ -7,7 +7,7 @@ authors = ["Fuad Ismail <fuad1502@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/fuad1502/llvm-stackmap-parser"
 readme = "README.md"
-keywords = ["compiler", "llvm"]
+keywords = ["compiler", "llvm", "garbage-collection"]
 
 [dependencies]
 goblin = "0.10.7"
