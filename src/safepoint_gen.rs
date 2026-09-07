@@ -87,7 +87,7 @@ impl<'a> SafepointSourceGenerator<'a> {
     fn gen_offsets(&mut self) -> Result<(), std::io::Error> {
         for (i, record) in self.stack_map.stack_map_records.iter().enumerate() {
             for location in record.locations.iter().take(3) {
-                if !matches!(location.typ, LocationType::Constant(0)) {
+                if !matches!(location.typ, LocationType::Constant(_)) {
                     panic!(
                         "Expected 3 constants at the start of record locations. Found: {:?}",
                         location
@@ -98,7 +98,7 @@ impl<'a> SafepointSourceGenerator<'a> {
                 continue;
             }
             writeln!(self.wr, "static struct Location obj_locations_{i}[] = {{")?;
-            for location in record.locations.iter().skip(3) {
+            for location in record.locations.iter().skip(3).step_by(2) {
                 match location.typ {
                     LocationType::Direct(reg, offset) => {
                         writeln!(self.wr, "    {{DIRECT, {reg}, {offset}, 0}}, ")?
