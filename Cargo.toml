@@ -2,6 +2,12 @@
 name = "llvm-stackmap-parser"
 version = "0.1.0"
 edition = "2024"
+description = "LLVM Stack Map parser"
+authors = ["Fuad Ismail <fuad1502@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/fuad1502/llvm-stackmap-parser"
+readme = "README.md"
+keywords = ["compiler", "llvm"]
 
 [dependencies]
 goblin = "0.10.7"
